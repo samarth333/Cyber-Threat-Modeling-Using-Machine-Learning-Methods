@@ -1,0 +1,75 @@
+data=VarName1;
+data(1:5)
+
+
+figure
+plot(data)
+num_steps_train = floor(.9*numel(data));
+train = data(1:num_steps_train+1);
+test = data(num_steps_train+1:end);
+mu = mean(train);
+sigma = std(train);
+std_train_data = (train-mu)/sigma;
+std_train_data;
+XTrain = std_train_data(1:end-1);
+YTrain=std_train_data(2:end);
+num_features=1;
+num_responses=1;
+num_hidden_units=200;
+layers = [sequenceInputLayer(num_features),lstmLayer(num_hidden_units),fullyConnectedLayer(num_responses),regressionLayer];
+options = trainingOptions('adam','MaxEpochs',250,'GradientThreshold',1,'InitialLearnRate',.005,'LearnRateSchedule','piecewise','LearnRateDropPeriod',125,'LearnRateDropFactor',.2,'Verbose',0,'Plots','training-progress');
+net=trainNetwork(XTrain,YTrain,layers,options);
+std_test_data=(test-mu)/sigma;
+XTest = std_test_data(1:end-1);
+net = predictAndUpdateState(net,XTrain);
+[net,YPred]=predictAndUpdateState(net,YTrain(end));
+num_steps_test = numel(XTest);
+for i=2:num_steps_test
+[net,YPred(:,i)] = predictAndUpdateState(net,YPred(:,i-1));
+end
+YPred=YPred*sigma+mu;
+YTest=test(2:end);
+rmse=sqrt(mean((YPred-YTest).^2));
+
+figure 
+plot(train(1:end-1))
+hold on
+idx=num_steps_train:(num_steps_train+num_steps_test);
+plot(idx,[data(num_steps_train),YPred],'.-');
+legend(["Observed" "Forecast"])
+figure
+subplot(2,1,1)
+plot(YTest)
+hold on
+plot(YPred,'.-')
+hold off
+legend(["Observed" "Forecast"])
+subplot(2,1,2)
+stem(YPred-YTest)
+ylabel("Error")
+title("RMSE= "+rmse)
+net=resetState(net);
+net=predictAndUpdateState(net,XTrain);
+YPred=[];
+for i=1:num_steps_test
+    [net,YPred(:,i)]=predictAndUpdateState(net,XTest(:,i));
+end
+YPred=sigma*YPred+mu;
+rmse = sqrt(mean(YPred-YTest).^2);
+rmse;
+
+figure
+subplot(2,1,1)
+plot(YTest)
+hold on
+plot(YPred,'.-')
+hold off
+legend(["Observed" "Forecast"])
+ylabel("Cases")
+xlabel("Month")
+title("Forecast with updates")
+subplot(2,1,2)
+stem(YPred-YTest)
+ylabel("Error")
+xlabel("Month")
+title("RMSE="+rmse)
